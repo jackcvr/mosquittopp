@@ -1,0 +1,31 @@
+FROM alpine:latest
+
+RUN apk add --no-cache \
+    build-base \
+    cmake \
+    autoconf \
+    automake \
+    libtool \
+    git \
+    pkgconf \
+    linux-headers \
+    mosquitto \
+    mosquitto-clients \
+    mosquitto-dev
+
+RUN apk add --no-cache zig \
+    && printf '#!/bin/sh\nexec zig cc "$@"\n' > /usr/local/bin/zig-cc \
+    && printf '#!/bin/sh\nexec zig c++ "$@"\n' > /usr/local/bin/zig-c++ \
+    && printf '#!/bin/sh\nexec zig ar "$@"\n' > /usr/local/bin/zig-ar \
+    && printf '#!/bin/sh\nexec zig ranlib "$@"\n' > /usr/local/bin/zig-ranlib \
+    && chmod +x /usr/local/bin/zig-*
+
+ENV CC="zig-cc" \
+    CXX="zig-c++" \
+    AR="zig-ar" \
+    RANLIB="zig-ranlib" \
+    CFLAGS="-target x86_64-linux-musl -Oz -flto" \
+    CXXFLAGS="-target x86_64-linux-musl -Oz -flto" \
+    LDFLAGS="-s"
+
+WORKDIR /app

@@ -1,0 +1,27 @@
+x-base: &BASE
+  build:
+    context: .
+    dockerfile: docker/Dockerfile.alpine
+  init: true
+  privileged: true
+  volumes:
+    - .:/app
+
+services:
+  builder:
+    <<: *BASE
+    command: make
+
+  server:
+    <<: *BASE
+    command: mosquitto
+
+  client:
+    <<: *BASE
+    network_mode: service:server
+    depends_on:
+      builder:
+        condition: service_completed_successfully
+      server:
+        condition: service_started
+    command: sh -c "\time -v ./build/main_static"
