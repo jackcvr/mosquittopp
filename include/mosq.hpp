@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cerrno>
+#include <chrono>
 #include <condition_variable>
 #include <memory>
 #include <mutex>
@@ -122,22 +123,42 @@ class Client {
 public:
     class MidToken {
     public:
-        MidToken(Client* c) : client_(c) {
-            std::lock_guard lock(client_->mid_mtx_);
-            client_->pending_mids_.insert(this);
-        }
+        MidToken() : client_(nullptr), mid_(0) {}
 
         MidToken(const MidToken&) = delete;
         MidToken& operator=(const MidToken&) = delete;
 
         ~MidToken() {
+            if (client_) {
+                std::lock_guard lock(client_->mid_mtx_);
+                client_->pending_mids_.erase(this);
+            }
+        }
+
+        void assign(Client& c) {
+            client_ = &c;
             std::lock_guard lock(client_->mid_mtx_);
-            client_->pending_mids_.erase(this);
+            client_->pending_mids_.insert(this);
+        }
+
+        template <typename Rep, typename Period>
+        bool wait(const std::chrono::duration<Rep, Period>& timeout) {
+            if (mid_ == 0 || !client_) return false;
+            std::unique_lock lock(client_->mid_mtx_);
+            return client_->mid_cv_.wait_for(
+                lock, timeout, [this] { return !client_->pending_mids_.contains(this); });
+        }
+
+        void wait() {
+            if (mid_ == 0 || !client_) return;
+            std::unique_lock lock(client_->mid_mtx_);
+            client_->mid_cv_.wait(lock, [this] { return !client_->pending_mids_.contains(this); });
         }
 
         operator int*() {
             return &mid_;
         }
+
         int id() const {
             return mid_;
         }
@@ -145,12 +166,15 @@ public:
     private:
         friend class Client;
         Client* client_;
-        int mid_{0};
+        int mid_;
     };
 
-    explicit Client(const std::string& id = "", bool clean_session = true) {
+    explicit Client(void* userdata) : Client("", true, userdata) {}
+
+    explicit Client(const std::string& id = "", bool clean_session = true,
+                    void* userdata = nullptr) {
         const char* id_str = id.empty() ? nullptr : id.c_str();
-        struct mosquitto* m = mosquitto_new(id_str, clean_session, nullptr);
+        struct mosquitto* m = mosquitto_new(id_str, clean_session, userdata);
         if (!m) {
             throw std::system_error(errno, std::generic_category(),
                                     "Failed to create Mosquitto instance");
@@ -169,16 +193,6 @@ public:
 
     struct mosquitto* get() const noexcept {
         return mosq_.get();
-    }
-
-    auto create_mid() {
-        return MidToken(this);
-    }
-
-    void wait_for_mid(MidToken& tracker) {
-        if (tracker.id() == 0) return;
-        std::unique_lock lock(mid_mtx_);
-        mid_cv_.wait(lock, [&] { return !pending_mids_.contains(&tracker); });
     }
 
     auto reinitialise(const std::string& id, bool clean_session) {
@@ -229,20 +243,40 @@ public:
         return ErrorPolicy::handle(mosquitto_disconnect(mosq_.get()), "Disconnect failed");
     }
 
-    auto publish(const std::string& topic, const void* payload, int payloadlen, int qos,
-                 bool retain, int* mid = nullptr) {
-        return ErrorPolicy::handle(
-            mosquitto_publish(mosq_.get(), mid, topic.c_str(), payloadlen, payload, qos, retain),
-            "Publish failed");
+    auto publish(int* mid, const std::string& topic, const void* payload, int payloadlen,
+                 int qos = 0, bool retain = false) {
+        int rc =
+            mosquitto_publish(mosq_.get(), mid, topic.c_str(), payloadlen, payload, qos, retain);
+        return ErrorPolicy::handle(rc, "Publish failed");
     }
 
-    auto subscribe(const std::string& sub, int qos = 0, int* mid = nullptr) {
+    auto publish(MidToken& token, const std::string& topic, const void* payload, int payloadlen,
+                 int qos = 0, bool retain = false) {
+        token.assign(*this);
+        int rc =
+            mosquitto_publish(mosq_.get(), token, topic.c_str(), payloadlen, payload, qos, retain);
+        return ErrorPolicy::handle(rc, "Publish failed");
+    }
+
+    auto subscribe(int* mid, const std::string& sub, int qos = 0) {
         return ErrorPolicy::handle(mosquitto_subscribe(mosq_.get(), mid, sub.c_str(), qos),
                                    "Subscribe failed");
     }
 
-    auto unsubscribe(const std::string& sub, int* mid = nullptr) {
+    auto subscribe(MidToken& token, const std::string& sub, int qos = 0) {
+        token.assign(*this);
+        return ErrorPolicy::handle(mosquitto_subscribe(mosq_.get(), token, sub.c_str(), qos),
+                                   "Subscribe failed");
+    }
+
+    auto unsubscribe(int* mid, const std::string& sub) {
         return ErrorPolicy::handle(mosquitto_unsubscribe(mosq_.get(), mid, sub.c_str()),
+                                   "Unsubscribe failed");
+    }
+
+    auto unsubscribe(MidToken& token, const std::string& sub) {
+        token.assign(*this);
+        return ErrorPolicy::handle(mosquitto_unsubscribe(mosq_.get(), token, sub.c_str()),
                                    "Unsubscribe failed");
     }
 
