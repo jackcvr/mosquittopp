@@ -6,13 +6,16 @@
 #error "Unsupported libmosquitto version: must be >=2.0.11 and <3"
 #endif
 
+#include <algorithm>
 #include <cerrno>
+#include <condition_variable>
 #include <memory>
 #include <mutex>
 #include <stdexcept>
 #include <string>
 #include <system_error>
 #include <unordered_map>
+#include <unordered_set>
 
 #if __cplusplus >= 202302L && __has_include(<expected>)
 #include <expected>
@@ -114,9 +117,37 @@ struct NullMutex {
     void unlock() noexcept {}
 };
 
-template <typename ErrorPolicy = ExceptionPolicy, bool ThreadSafe = false>
+template <typename ErrorPolicy = ExceptionPolicy, bool ThreadSafe = true>
 class Client {
 public:
+    class MidToken {
+    public:
+        MidToken(Client* c) : client_(c) {
+            std::lock_guard lock(client_->mid_mtx_);
+            client_->pending_mids_.insert(this);
+        }
+
+        MidToken(const MidToken&) = delete;
+        MidToken& operator=(const MidToken&) = delete;
+
+        ~MidToken() {
+            std::lock_guard lock(client_->mid_mtx_);
+            client_->pending_mids_.erase(this);
+        }
+
+        operator int*() {
+            return &mid_;
+        }
+        int id() const {
+            return mid_;
+        }
+
+    private:
+        friend class Client;
+        Client* client_;
+        int mid_{0};
+    };
+
     explicit Client(const std::string& id = "", bool clean_session = true) {
         const char* id_str = id.empty() ? nullptr : id.c_str();
         struct mosquitto* m = mosquitto_new(id_str, clean_session, nullptr);
@@ -125,6 +156,9 @@ public:
                                     "Failed to create Mosquitto instance");
         }
         mosq_.reset(m);
+        if constexpr (ThreadSafe) {
+            threaded_set(true);
+        }
         register_instance(m, this);
         setup_callbacks();
     }
@@ -135,6 +169,16 @@ public:
 
     struct mosquitto* get() const noexcept {
         return mosq_.get();
+    }
+
+    auto create_mid() {
+        return MidToken(this);
+    }
+
+    void wait_for_mid(MidToken& tracker) {
+        if (tracker.id() == 0) return;
+        std::unique_lock lock(mid_mtx_);
+        mid_cv_.wait(lock, [&] { return !pending_mids_.contains(&tracker); });
     }
 
     auto reinitialise(const std::string& id, bool clean_session) {
@@ -344,10 +388,22 @@ public:
 protected:
     using MutexType = std::conditional_t<ThreadSafe, std::mutex, NullMutex>;
 
-    static inline std::unordered_map<struct mosquitto*, Client*> registry;
     static inline MutexType registry_mtx;
+    static inline std::unordered_map<struct mosquitto*, Client*> registry;
 
     std::unique_ptr<struct mosquitto, MosqDeleter> mosq_;
+    std::mutex mid_mtx_;
+    std::condition_variable mid_cv_;
+    std::unordered_set<MidToken*> pending_mids_;
+
+    void resolve_mid(int mid) {
+        std::lock_guard lock(mid_mtx_);
+        auto it = std::ranges::find_if(pending_mids_, [mid](auto* t) { return t->id() == mid; });
+        if (it != pending_mids_.end()) {
+            pending_mids_.erase(it);
+            mid_cv_.notify_all();
+        }
+    }
 
     static void register_instance(struct mosquitto* m, Client* obj) {
         std::lock_guard lock(registry_mtx);
@@ -375,7 +431,10 @@ protected:
         });
 
         mosquitto_publish_callback_set(mosq_.get(), [](struct mosquitto* m, void*, int mid) {
-            if (auto* self = find_instance(m)) self->on_publish(mid);
+            if (auto* self = find_instance(m)) {
+                self->resolve_mid(mid);
+                self->on_publish(mid);
+            }
         });
 
         mosquitto_message_callback_set(
@@ -385,11 +444,17 @@ protected:
 
         mosquitto_subscribe_callback_set(mosq_.get(), [](struct mosquitto* m, void*, int mid,
                                                          int qos_count, const int* granted_qos) {
-            if (auto* self = find_instance(m)) self->on_subscribe(mid, qos_count, granted_qos);
+            if (auto* self = find_instance(m)) {
+                self->resolve_mid(mid);
+                self->on_subscribe(mid, qos_count, granted_qos);
+            }
         });
 
         mosquitto_unsubscribe_callback_set(mosq_.get(), [](struct mosquitto* m, void*, int mid) {
-            if (auto* self = find_instance(m)) self->on_unsubscribe(mid);
+            if (auto* self = find_instance(m)) {
+                self->resolve_mid(mid);
+                self->on_unsubscribe(mid);
+            }
         });
 
         mosquitto_log_callback_set(mosq_.get(),
