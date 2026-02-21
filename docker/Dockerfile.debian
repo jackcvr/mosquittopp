@@ -10,6 +10,7 @@ RUN apt-get update && apt-get install -y \
     pkg-config \
     time \
     mosquitto \
-    mosquitto-dev
+    mosquitto-clients \
+    libmosquitto-dev
 
 WORKDIR /app

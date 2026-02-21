@@ -14,7 +14,7 @@ services:
 
   server:
     <<: *BASE
-    command: mosquitto
+    command: mosquitto -v
 
   client:
     <<: *BASE
@@ -24,4 +24,4 @@ services:
         condition: service_completed_successfully
       server:
         condition: service_started
-    command: sh -c "\time -v ./build/main_static"
+    command: \time -v ./build/main_static

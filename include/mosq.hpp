@@ -289,6 +289,10 @@ public:
         mosquitto_user_data_set(mosq_.get(), userdata);
     }
 
+    void* userdata() const {
+        return mosquitto_userdata(mosq_.get());
+    }
+
     auto socks5_set(const std::string& host, int port = 1080, const std::string& username = "",
                     const std::string& password = "") {
         const char* u = username.empty() ? nullptr : username.c_str();
@@ -341,22 +345,22 @@ protected:
     using MutexType = std::conditional_t<ThreadSafe, std::mutex, NullMutex>;
 
     static inline std::unordered_map<struct mosquitto*, Client*> registry;
-    static inline MutexType registry_mux;
+    static inline MutexType registry_mtx;
 
     std::unique_ptr<struct mosquitto, MosqDeleter> mosq_;
 
     static void register_instance(struct mosquitto* m, Client* obj) {
-        std::lock_guard lock(registry_mux);
+        std::lock_guard lock(registry_mtx);
         registry[m] = obj;
     }
 
     static void unregister_instance(struct mosquitto* m) {
-        std::lock_guard lock(registry_mux);
+        std::lock_guard lock(registry_mtx);
         registry.erase(m);
     }
 
     static Client* find_instance(struct mosquitto* m) {
-        std::lock_guard lock(registry_mux);
+        std::lock_guard lock(registry_mtx);
         auto it = registry.find(m);
         return (it != registry.end()) ? it->second : nullptr;
     }
