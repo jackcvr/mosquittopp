@@ -45,8 +45,6 @@ public:
 };
 
 int main() {
-    mosq::lib_init();
-
     AppContext ctx;
     Client client{&ctx};
 
@@ -75,7 +73,6 @@ int main() {
 
     ctx.is_done.acquire();
     client.disconnect();
-    mosq::lib_cleanup();
 
     return 0;
 }

@@ -25,12 +25,53 @@
 
 namespace mosq {
 
+struct Version {
+    int major;
+    int minor;
+    int revision;
+    int number;
+};
+
+inline Version lib_version() noexcept {
+    int maj, min, rev;
+    int num = mosquitto_lib_version(&maj, &min, &rev);
+    return {maj, min, rev, num};
+}
+
 inline const char* strerror(int err) noexcept {
     return mosquitto_strerror(err);
 }
 
 inline const char* connack_string(int connack_code) noexcept {
     return mosquitto_connack_string(connack_code);
+}
+
+int property_check_command(int command, int identifier) {
+    return mosquitto_property_check_command(command, identifier);
+}
+
+int property_check_all(int command, const mosquitto_property* properties) {
+    return mosquitto_property_check_all(command, properties);
+}
+
+const char* reason_string(int reason_code) {
+    return mosquitto_reason_string(reason_code);
+}
+
+int sub_topic_tokenise(const char* subtopic, char*** topics, int* count) {
+    return mosquitto_sub_topic_tokenise(subtopic, topics, count);
+}
+
+int sub_topic_tokens_free(char*** topics, int count) {
+    return mosquitto_sub_topic_tokens_free(topics, count);
+}
+
+int topic_matches_sub(const char* sub, const char* topic, bool* result) {
+    return mosquitto_topic_matches_sub(sub, topic, result);
+}
+
+int validate_utf8(const char* str, int len) {
+    return mosquitto_validate_utf8(str, len);
 }
 
 class MosquittoException : public std::runtime_error {
@@ -86,26 +127,14 @@ struct ExpectedPolicy {
 };
 #endif
 
-struct Version {
-    int major;
-    int minor;
-    int revision;
-    int number;
+struct LibManager {
+    LibManager() {
+        ExceptionPolicy::handle(mosquitto_lib_init(), "Library init failed");
+    }
+    ~LibManager() {
+        mosquitto_lib_cleanup();
+    }
 };
-
-inline Version lib_version() noexcept {
-    int maj, min, rev;
-    int num = mosquitto_lib_version(&maj, &min, &rev);
-    return {maj, min, rev, num};
-}
-
-auto lib_init() {
-    return ExceptionPolicy::handle(mosquitto_lib_init(), "Library init failed");
-}
-
-auto lib_cleanup() noexcept {
-    return mosquitto_lib_cleanup();
-}
 
 struct MosqDeleter {
     void operator()(struct mosquitto* m) const noexcept {
@@ -173,6 +202,8 @@ public:
 
     explicit Client(const std::string& id = "", bool clean_session = true,
                     void* userdata = nullptr) {
+        [[maybe_unused]] static LibManager _;
+
         const char* id_str = id.empty() ? nullptr : id.c_str();
         struct mosquitto* m = mosquitto_new(id_str, clean_session, userdata);
         if (!m) {
