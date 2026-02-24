@@ -19,30 +19,25 @@ CPMAddPackage(
     SOURCE_DIR ..
 )
 
-
-# cJSON Configuration for static linking
+# cJSON (static)
 set(CMAKE_C_STANDARD 99 CACHE STRING "" FORCE)
 CPMAddPackage(
-    NAME cJSON
+    NAME cjson
     GITHUB_REPOSITORY DaveGamble/cJSON
     VERSION 1.7.19
     OPTIONS
         "BUILD_SHARED_AND_STATIC_LIBS ON"
         "ENABLE_CJSON_TEST OFF"
-
 )
-if(cJSON_ADDED)
-    file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/include/cjson")
-    file(COPY "${cJSON_SOURCE_DIR}/cJSON.h" DESTINATION "${CMAKE_BINARY_DIR}/include/cjson")
-    include_directories("${CMAKE_BINARY_DIR}/include")
-    set(CJSON_DIR "${cJSON_BINARY_DIR}" CACHE PATH "" FORCE)
-    set(CJSON_INCLUDE_DIR "${cJSON_SOURCE_DIR}" CACHE INTERNAL "")
-    set(CJSON_LIBRARY cjson CACHE INTERNAL "")
-    set(CJSON_FOUND TRUE CACHE INTERNAL "")
+if(cjson_ADDED)
+    file(MAKE_DIRECTORY "${cjson_SOURCE_DIR}/cjson")
+    file(COPY "${cjson_SOURCE_DIR}/cJSON.h" DESTINATION "${cjson_SOURCE_DIR}/cjson")
+    include_directories("${cjson_SOURCE_DIR}")
+    set(CJSON_DIR "${cjson_BINARY_DIR}" CACHE PATH "" FORCE)
     add_library(cJSON STATIC IMPORTED GLOBAL)
     set_target_properties(cJSON PROPERTIES
-        IMPORTED_LOCATION "${cJSON_BINARY_DIR}/libcjson.a"
-        INTERFACE_INCLUDE_DIRECTORIES "${cJSON_SOURCE_DIR}"
+        IMPORTED_LOCATION "${cjson_BINARY_DIR}/libcjson.a"
+        INTERFACE_INCLUDE_DIRECTORIES "${cjson_SOURCE_DIR}"
     )
 endif()
 
@@ -59,10 +54,10 @@ CPMAddPackage(
         "WITH_PLUGINS OFF"
         "WITH_DOCS OFF"
         "WITH_WEBSOCKETS OFF"
-        "WITH_TLS OFF"
         "WITH_CTRL_SHELL OFF"
         "WITH_TESTS OFF"
         "WITH_LTO OFF"
+        "WITH_TLS OFF"
         "WITH_BUNDLED_DEPS ON"
         "WITH_STATIC_LIBRARIES ON"
         "WITH_PIC ON"
@@ -78,7 +73,7 @@ if(libmosquitto_ADDED)
         "$<$<COMPILE_LANGUAGE:C>:sys/random.h>"
     )
     target_include_directories(libmosquitto_static PRIVATE "${libmosquitto_SOURCE_DIR}/deps")
-    target_include_directories(libmosquitto_static INTERFACE ${libmosquitto_SOURCE_DIR}/include)
+    target_include_directories(libmosquitto_static INTERFACE "${libmosquitto_SOURCE_DIR}/include")
 endif()
 add_exe(main_static main.cpp 23)
 target_link_libraries(main_static PRIVATE mosquittopp libmosquitto_static)

@@ -184,12 +184,12 @@ public:
             client_->mid_cv_.wait(lock, [this] { return !client_->pending_mids_.contains(this); });
         }
 
-        operator int*() {
-            return &mid_;
-        }
-
         int id() const {
             return mid_;
+        }
+
+        operator int*() {
+            return &mid_;
         }
 
     private:
@@ -212,10 +212,10 @@ public:
         }
         mosq_.reset(m);
         if constexpr (ThreadSafe) {
-            threaded_set(true);
+            ExceptionPolicy::handle(mosquitto_threaded_set(m, true), "Threaded set failed");
         }
         register_instance(m, this);
-        setup_callbacks();
+        callbacks_set();
     }
 
     virtual ~Client() {
@@ -226,14 +226,13 @@ public:
         return mosq_.get();
     }
 
-    auto reinitialise(const std::string& id, bool clean_session) {
+    auto reinitialise(const std::string& id, bool clean_session = true, void* userdata = nullptr) {
         const char* id_str = id.empty() ? nullptr : id.c_str();
-        int rc = mosquitto_reinitialise(mosq_.get(), id_str, clean_session, this);
-        auto res = ErrorPolicy::handle(rc, "Reinitialise failed");
-        if (res) {
-            setup_callbacks();
+        int rc = mosquitto_reinitialise(mosq_.get(), id_str, clean_session, userdata);
+        if (rc == MOSQ_ERR_SUCCESS) {
+            callbacks_set();
         }
-        return res;
+        return ErrorPolicy::handle(rc, "Reinitialise failed");
     }
 
     auto connect(const std::string& host, int port = 1883, int keepalive = 60) {
@@ -486,7 +485,7 @@ protected:
         return (it != registry.end()) ? it->second : nullptr;
     }
 
-    void setup_callbacks() {
+    void callbacks_set() {
         mosquitto_connect_callback_set(mosq_.get(), [](struct mosquitto* m, void*, int rc) {
             if (auto* self = find_instance(m)) self->on_connect(rc);
         });

@@ -11,7 +11,9 @@ RUN apk add --no-cache \
     linux-headers \
     mosquitto \
     mosquitto-clients \
-    mosquitto-dev
+    mosquitto-dev \
+    openssl \
+    openssl-dev
 
 RUN apk add --no-cache zig \
     && printf '#!/bin/sh\nexec zig cc "$@"\n' > /usr/local/bin/zig-cc \
