@@ -1,5 +1,5 @@
 #include <chrono>
-#include <print>
+#include <iostream>
 #include <semaphore>
 #include <stdexcept>
 #include <string>
@@ -24,7 +24,7 @@ public:
 
     void on_connect(int rc) override {
         if (rc == 0) {
-            std::println("Connected.");
+            std::cout << "Connected." << std::endl;
             subscribe(nullptr, "sensors/#", 1);
             auto* ctx = context();
             if (ctx) {
@@ -35,8 +35,7 @@ public:
 
     void on_message(const struct mosquitto_message* msg) override {
         std::string_view payload(static_cast<char*>(msg->payload), msg->payloadlen);
-        std::println("{} {}", msg->topic, payload);
-        std::fflush(stdout);
+        std::cout << msg->topic << " " << payload << std::endl;
         auto* ctx = context();
         if (ctx && ++ctx->message_count >= 5) {
             ctx->is_done.release();
@@ -49,25 +48,25 @@ int main() {
     Client client{&ctx};
 
     if (auto res = client.connect_async("localhost"); !res) {
-        std::println(stderr, "Error: {}", res.error().message());
+        std::cerr << "Error: " << res.error().message() << std::endl;
         return 1;
     }
 
     std::jthread worker([&client] { client.loop_forever(); });
-    std::println("Running...");
+    std::cout << "Wait connection..." << std::endl;
 
     ctx.is_connected.acquire();
 
     for (int i = 0; i < 5; ++i) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
-        std::string payload = "Message " + std::to_string(i);
+        std::string payload = std::format("Message {}", i);
         Client::MidToken token;
         auto res = client.publish(token, "sensors/test", payload.data(), payload.size(), 1);
         if (!res) {
             throw std::runtime_error(res.error().message());
         }
         if (!token.wait(std::chrono::seconds(1))) {
-            std::println(stderr, "Publish timed out!");
+            std::cerr << "Publish timed out!" << std::endl;
         }
     }
 

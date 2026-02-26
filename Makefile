@@ -4,7 +4,7 @@ CMAKE_ARGS :=
 .PHONY: all clean
 
 all: build/CMakeCache.txt
-	cmake --build $(BUILD_DIR) -j$(nproc)
+	cmake --build $(BUILD_DIR) -j$(nproc) --verbose
 
 build/CMakeCache.txt: CMakeLists.txt
 	cmake -S tests -B $(BUILD_DIR) $(CMAKE_ARGS)

@@ -11,6 +11,9 @@ RUN apt-get update && apt-get install -y \
     time \
     mosquitto \
     mosquitto-clients \
-    libmosquitto-dev
+    libmosquitto-dev \
+    libcjson-dev
+
+# RUN apt-get install -y libssl-dev
 
 WORKDIR /app

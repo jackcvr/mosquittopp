@@ -19,27 +19,14 @@ CPMAddPackage(
     SOURCE_DIR ..
 )
 
-# cJSON (static)
-set(CMAKE_C_STANDARD 99 CACHE STRING "" FORCE)
-CPMAddPackage(
-    NAME cjson
-    GITHUB_REPOSITORY DaveGamble/cJSON
-    VERSION 1.7.19
-    OPTIONS
-        "BUILD_SHARED_AND_STATIC_LIBS ON"
-        "ENABLE_CJSON_TEST OFF"
-)
-if(cjson_ADDED)
-    file(MAKE_DIRECTORY "${cjson_SOURCE_DIR}/cjson")
-    file(COPY "${cjson_SOURCE_DIR}/cJSON.h" DESTINATION "${cjson_SOURCE_DIR}/cjson")
-    include_directories("${cjson_SOURCE_DIR}")
-    set(CJSON_DIR "${cjson_BINARY_DIR}" CACHE PATH "" FORCE)
-    add_library(cJSON STATIC IMPORTED GLOBAL)
-    set_target_properties(cJSON PROPERTIES
-        IMPORTED_LOCATION "${cjson_BINARY_DIR}/libcjson.a"
-        INTERFACE_INCLUDE_DIRECTORIES "${cjson_SOURCE_DIR}"
-    )
-endif()
+# cJSON fix for libmosquitto
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(libcjson REQUIRED libcjson)
+file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/include/cjson")
+file(COPY "/usr/include/cjson/cJSON.h" DESTINATION "${CMAKE_BINARY_DIR}/include/cjson")
+include_directories("${CMAKE_BINARY_DIR}/include")
+
+# TODO: install cjson via CPM for debian image
 
 # libmosquitto (static)
 CPMAddPackage(
@@ -58,22 +45,24 @@ CPMAddPackage(
         "WITH_TESTS OFF"
         "WITH_LTO OFF"
         "WITH_TLS OFF"
+        "OPENSSL_USE_STATIC_LIBS ON"
         "WITH_BUNDLED_DEPS ON"
         "WITH_STATIC_LIBRARIES ON"
+        "WITH_SHARED_LIBRARIES ON"
         "WITH_PIC ON"
+        "CJSON_LIBRARY /usr/lib/libcjson.a"  # alpine hardcoded path
 )
 if(libmosquitto_ADDED)
-    add_dependencies(libmosquitto_static cjson)
-    if(TARGET libmosquitto)
-        add_dependencies(libmosquitto cjson)
-    endif()
+    target_include_directories(libmosquitto_static PRIVATE
+        "${libmosquitto_SOURCE_DIR}/deps"
+        "${libmosquitto_SOURCE_DIR}/libcommon"
+    )
+    include_directories("${libmosquitto_SOURCE_DIR}/include")
     target_compile_definitions(libmosquitto_common PRIVATE HAVE_GETRANDOM=1)
     target_compile_options(libmosquitto_common PRIVATE
         "$<$<COMPILE_LANGUAGE:C>:-include>"
         "$<$<COMPILE_LANGUAGE:C>:sys/random.h>"
     )
-    target_include_directories(libmosquitto_static PRIVATE "${libmosquitto_SOURCE_DIR}/deps")
-    target_include_directories(libmosquitto_static INTERFACE "${libmosquitto_SOURCE_DIR}/include")
 endif()
 add_exe(main_static main.cpp 23)
 target_link_libraries(main_static PRIVATE mosquittopp libmosquitto_static)
