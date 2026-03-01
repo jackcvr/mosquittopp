@@ -19,6 +19,8 @@ CPMAddPackage(
     NAME mosquittopp
     SOURCE_DIR ..
 )
+
+# cJSON (static + shared)
 CPMAddPackage(
     NAME cjson
     GITHUB_REPOSITORY DaveGamble/cJSON
