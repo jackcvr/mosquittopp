@@ -1,7 +1,7 @@
 x-base: &BASE
   build:
     context: .
-    dockerfile: docker/Dockerfile.alpine
+    dockerfile: docker/alpine.Dockerfile
   init: true
   privileged: true
   volumes:

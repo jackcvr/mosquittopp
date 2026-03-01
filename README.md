@@ -12,6 +12,7 @@ A modern header-only C++17/23 wrapper for [mosquitto](https://github.com/eclipse
 #include <string>
 #include <string_view>
 #include <thread>
+#include <format>
 
 #include "mosq.hpp"
 

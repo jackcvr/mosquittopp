@@ -8,7 +8,8 @@ set(LIBMOSQUITTO_VERSION "2.0.11")
 function(add_exe name src std)
     add_executable(${name} ${src})
     target_compile_features(${name} PRIVATE cxx_std_${std})
-    target_compile_options(${name} PRIVATE -Os -pedantic -Wall -Wextra -U_LIBCPP_ENABLE_CXX17_REMOVED_UNEXPECTED_FUNCTIONS)
+    target_compile_options(${name} PRIVATE -stdlib=libc++ -Os -pedantic -Wall -Wextra -U_LIBCPP_ENABLE_CXX17_REMOVED_UNEXPECTED_FUNCTIONS)
+    target_link_options(${name} PRIVATE -stdlib=libc++)
 endfunction()
 
 include(cmake/CPM.cmake)
@@ -18,15 +19,22 @@ CPMAddPackage(
     NAME mosquittopp
     SOURCE_DIR ..
 )
-
-# cJSON fix for libmosquitto
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(libcjson REQUIRED libcjson)
-file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/include/cjson")
-file(COPY "/usr/include/cjson/cJSON.h" DESTINATION "${CMAKE_BINARY_DIR}/include/cjson")
-include_directories("${CMAKE_BINARY_DIR}/include")
-
-# TODO: install cjson via CPM for debian image
+CPMAddPackage(
+    NAME cjson
+    GITHUB_REPOSITORY DaveGamble/cJSON
+    VERSION 1.7.19
+    OPTIONS
+        "BUILD_SHARED_AND_STATIC_LIBS ON"
+        "ENABLE_CJSON_TEST OFF"
+        "CMAKE_POSITION_INDEPENDENT_CODE ON"
+        "ENABLE_CUSTOM_COMPILER_FLAGS OFF"
+)
+if(cjson_ADDED)
+    file(MAKE_DIRECTORY "${cjson_SOURCE_DIR}/cjson")
+    file(COPY "${cjson_SOURCE_DIR}/cJSON.h" DESTINATION "${cjson_SOURCE_DIR}/cjson/")
+    include_directories("${cjson_SOURCE_DIR}")
+    add_library(cJSON ALIAS cjson-static)
+endif()
 
 # libmosquitto (static)
 CPMAddPackage(
@@ -50,7 +58,6 @@ CPMAddPackage(
         "WITH_STATIC_LIBRARIES ON"
         "WITH_SHARED_LIBRARIES ON"
         "WITH_PIC ON"
-        "CJSON_LIBRARY /usr/lib/libcjson.a"  # alpine hardcoded path
 )
 if(libmosquitto_ADDED)
     target_include_directories(libmosquitto_static PRIVATE

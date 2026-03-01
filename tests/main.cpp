@@ -1,4 +1,5 @@
 #include <chrono>
+#include <format>
 #include <iostream>
 #include <semaphore>
 #include <stdexcept>

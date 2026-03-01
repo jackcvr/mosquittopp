@@ -11,8 +11,7 @@ RUN apk add --no-cache \
     linux-headers \
     mosquitto \
     mosquitto-clients \
-    mosquitto-dev \
-    cjson-dev cjson-static
+    mosquitto-dev
 
 # RUN apk add --no-cache openssl-dev openssl-libs-static
 
