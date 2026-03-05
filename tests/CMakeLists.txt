@@ -7,7 +7,7 @@ set(LIBMOSQUITTO_VERSION "2.0.11")
 
 function(add_exe name src std)
     add_executable(${name} ${src})
-    target_compile_features(${name} PRIVATE cxx_std_${std})
+    set_target_properties(${name} PROPERTIES CXX_STANDARD ${std})
     target_compile_options(${name} PRIVATE -stdlib=libc++ -Os -pedantic -Wall -Wextra -U_LIBCPP_ENABLE_CXX17_REMOVED_UNEXPECTED_FUNCTIONS)
     target_link_options(${name} PRIVATE -stdlib=libc++)
 endfunction()
