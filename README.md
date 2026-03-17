@@ -1,6 +1,6 @@
 # Mosquittopp
 
-A modern header-only C++17/23 wrapper for [mosquitto](https://github.com/eclipse-mosquitto/mosquitto).
+A modern header-only C++11/23 wrapper for [mosquitto](https://github.com/eclipse-mosquitto/mosquitto).
 
 ## Usage Example
 

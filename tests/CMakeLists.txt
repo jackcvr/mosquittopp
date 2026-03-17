@@ -2,12 +2,14 @@ cmake_minimum_required(VERSION 3.18)
 
 project(MosquittoppTest CXX)
 
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
+
 set(LIBMOSQUITTO_VERSION "2.0.11")
 
-function(add_exe name src std)
+function(add_exe name src)
     add_executable(${name} ${src})
-    set_target_properties(${name} PROPERTIES CXX_STANDARD ${std})
     target_compile_options(${name} PRIVATE -stdlib=libc++ -Os -pedantic -Wall -Wextra -U_LIBCPP_ENABLE_CXX17_REMOVED_UNEXPECTED_FUNCTIONS)
     target_link_options(${name} PRIVATE -stdlib=libc++)
 endfunction()
@@ -73,7 +75,7 @@ if(libmosquitto_ADDED)
         "$<$<COMPILE_LANGUAGE:C>:sys/random.h>"
     )
 endif()
-add_exe(main_static main.cpp 23)
+add_exe(main_static main.cpp)
 target_link_libraries(main_static PRIVATE mosquittopp libmosquitto_static)
 target_link_options(main_static PRIVATE -static)
 
@@ -81,5 +83,5 @@ target_link_options(main_static PRIVATE -static)
 # libmosquitto (dynamic pre-installed)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(libmosquitto REQUIRED IMPORTED_TARGET libmosquitto>=${LIBMOSQUITTO_VERSION})
-add_exe(main_dynamic main.cpp 23)
+add_exe(main_dynamic main.cpp)
 target_link_libraries(main_dynamic PRIVATE mosquittopp PkgConfig::libmosquitto)

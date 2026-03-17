@@ -83,7 +83,7 @@ public:
         return code_;
     }
 
-private:
+protected:
     int code_;
 };
 
@@ -192,7 +192,7 @@ public:
             return &mid_;
         }
 
-    private:
+    protected:
         friend class Client;
         Client* client_;
         int mid_;
